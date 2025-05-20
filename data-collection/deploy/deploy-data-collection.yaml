@@ -25,6 +25,7 @@ Metadata:
           - IncludeBudgetsModule
           - IncludeComputeOptimizerModule
           - IncludeCostAnomalyModule
+          - IncludeCostForecastModule
           - IncludeSupportCasesModule
           - IncludeECSChargebackModule
           - IncludeHealthEventsModule
@@ -195,6 +196,11 @@ Parameters:
     Description: "Collects AWS Cost Explorer Cost Anomalies Recommendations"
     AllowedValues: ['yes', 'no']
     Default: 'no'
+  IncludeCostForecastModule:
+    Type: String
+    Description: "Collects AWS Cost Explorer Forecast Data"
+    AllowedValues: ['yes', 'no']
+    Default: 'no'
   IncludeSupportCasesModule:
     Type: String
     Description: "Collects AWS Support Cases Data"
@@ -284,6 +290,7 @@ Conditions:
   DeployTAModule: !Equals [ !Ref IncludeTAModule, "yes"]
   DeployRightsizingModule: !Equals [ !Ref IncludeRightsizingModule, "yes"]
   DeployCostAnomalyModule: !Equals [ !Ref IncludeCostAnomalyModule, "yes"]
+  DeployCostForecastModule: !Equals [ !Ref IncludeCostForecastModule, "yes"]
   DeploySupportCasesModule: !Equals [ !Ref IncludeSupportCasesModule, "yes"]
   DeployInventoryCollectorModule: !Equals [ !Ref IncludeInventoryCollectorModule, "yes"]
   DeployComputeOptimizerModule: !Equals [ !Ref IncludeComputeOptimizerModule, "yes"]
@@ -1350,6 +1357,28 @@ Resources:
         CodeBucket: !If [ ProdCFNTemplateUsed, !FindInMap [RegionMap, !Ref "AWS::Region", CodeBucket], !Ref CFNSourceBucket ]
         StepFunctionTemplate: !FindInMap [StepFunctionCode, main-v3, TemplatePath]
         StepFunctionExecutionRoleARN: !GetAtt StepFunctionExecutionRole.Arn
+        SchedulerExecutionRoleARN: !GetAtt SchedulerExecutionRole.Arn
+
+  CostForecastModule:
+    Type: AWS::CloudFormation::Stack
+    Condition: DeployCostForecastModule
+    Properties:
+      TemplateURL: !Sub "https://${CFNSourceBucket}.s3.${AWS::URLSuffix}/cfn/data-collection/v3.9.1/module-cost-explorer-forecast.yaml"
+      Parameters:
+        DatabaseName: !Ref DatabaseName
+        DataBucketsKmsKeysArns: !Ref DataBucketsKmsKeysArns
+        DestinationBucket: !Ref S3Bucket
+        DestinationBucketARN: !GetAtt S3Bucket.Arn
+        ManagementRoleName: !Sub "${ResourcePrefix}${ManagementAccountRole}"
+        Schedule: !Ref ScheduleFrequent
+        GlueRoleARN: !GetAtt GlueRole.Arn
+        ResourcePrefix: !Ref ResourcePrefix
+        LambdaAnalyticsARN: !GetAtt LambdaAnalytics.Arn
+        AccountCollectorLambdaARN: !Sub "${AccountCollector.Outputs.LambdaFunctionARN}"
+        CodeBucket: !If [ ProdCFNTemplateUsed, !FindInMap [RegionMap, !Ref "AWS::Region", CodeBucket], !Ref CFNSourceBucket ]
+        StepFunctionTemplate: !FindInMap [StepFunctionCode, main-v3, TemplatePath]
+        StepFunctionExecutionRoleARN: !GetAtt StepFunctionExecutionRole.Arn
+        LambdaManageGlueTableARN: !GetAtt LambdaManageGlueTable.Arn
         SchedulerExecutionRoleARN: !GetAtt SchedulerExecutionRole.Arn
 
   LicenseManagerModule:
